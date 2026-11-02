@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recuperación PHP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: una columna de estudio de 900px; cabecera con progreso, pestañas por parte del examen, tarjeta de ejercicio, código siempre en bloque oscuro. */
+:root {
+  --bg: #F2F3F8;
+  --surface: #FFFFFF;
+  --ink: #1B1D2C;
+  --muted: #5D6079;
+  --line: #DADCEA;
+  --accent: #4F5B93;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E5E7F4;
+  --ok: #1E7549;
+  --ok-soft: #DCF1E5;
+  --bad: #B0281F;
+  --bad-soft: #FBE3E0;
+  --warn: #8A5A00;
+  --warn-soft: #FCEFCF;
+  --code-bg: #1C1E2B;
+  --code-fg: #E3E5F0;
+  --code-line: #2C2F42;
+  --code-muted: #7F849E;
+  --tk-k: #C5A3FF;
+  --tk-s: #A8D98B;
+  --tk-v: #8FC8FF;
+  --tk-c: #7F849E;
+  --tk-t: #FF9E7A;
+  --tk-f: #F2D479;
+  --tk-n: #F7A8C4;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111219; --surface: #1A1C27; --ink: #E7E8F1; --muted: #9A9DB5; --line: #2D3042;
+    --accent: #9EA7E6; --accent-ink: #13152A; --accent-soft: #252946;
+    --ok: #63CF95; --ok-soft: #16301F; --bad: #F58A80; --bad-soft: #3A1B19; --warn: #F0C064; --warn-soft: #362A10;
+    --code-bg: #0C0D13; --code-line: #23253A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111219; --surface: #1A1C27; --ink: #E7E8F1; --muted: #9A9DB5; --line: #2D3042;
+  --accent: #9EA7E6; --accent-ink: #13152A; --accent-soft: #252946;
+  --ok: #63CF95; --ok-soft: #16301F; --bad: #F58A80; --bad-soft: #3A1B19; --warn: #F0C064; --warn-soft: #362A10;
+  --code-bg: #0C0D13; --code-line: #23253A;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 920px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; display: grid; gap: 22px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.1; }
+h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.45rem; font-weight: 800; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; }
+code { font-family: var(--font-mono); font-size: 0.88em; background: var(--accent-soft); padding: 0.05em 0.35em; border-radius: 4px; }
+.muted { color: var(--muted); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Cabecera */
+.head { display: grid; gap: 14px; }
+.brand { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.tag { font-family: var(--font-mono); font-weight: 600; font-size: 0.85rem; background: var(--code-bg); color: var(--tk-t); padding: 4px 10px; border-radius: 6px; }
+.sub { color: var(--muted); max-width: 62ch; }
+.sub strong { color: var(--ink); font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: baseline; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 12px; font-size: 0.85rem; }
+.chip b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.chip.lvl-ok b { color: var(--ok); } .chip.lvl-mid b { color: var(--warn); } .chip.lvl-bad b { color: var(--bad); }
+
+/* Pestañas */
+.tabs-scroll { overflow-x: auto; margin-inline: -4px; padding-inline: 4px; }
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); min-width: max-content; }
+.tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 12px 9px; cursor: pointer; color: var(--muted); font-weight: 500; display: flex; gap: 8px; align-items: baseline; }
+.tab small { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+
+/* Vistas */
+.view { display: grid; gap: 16px; min-width: 0; }
+.view-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.view-head p { color: var(--muted); margin-top: 4px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; gap: 14px; min-width: 0; }
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.bar-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.counter { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 9px 16px; border-radius: 8px; cursor: pointer; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); }
+.check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.92rem; color: var(--muted); }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.empty { color: var(--muted); padding: 12px 0; }
+.kbd { font-family: var(--font-mono); font-size: 0.75rem; border: 1px solid var(--line); border-bottom-width: 2px; padding: 0 5px; border-radius: 4px; }
+
+/* Código */
+.code, .ln-btn, .blank, code { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+.code { background: var(--code-bg); color: var(--code-fg); font-family: var(--font-mono); font-size: 0.86rem; line-height: 1.65; padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 0; white-space: pre; tab-size: 4; }
+.tk-k { color: var(--tk-k); } .tk-s { color: var(--tk-s); } .tk-v { color: var(--tk-v); } .tk-c { color: var(--tk-c); font-style: italic; }
+.tk-t { color: var(--tk-t); } .tk-h { color: var(--tk-t); } .tk-f { color: var(--tk-f); } .tk-n { color: var(--tk-n); }
+
+/* Test */
+.q-text { font-size: 1.05rem; font-weight: 500; }
+.opts { display: grid; gap: 8px; }
+.opt { display: flex; gap: 12px; align-items: flex-start; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 12px; cursor: pointer; min-width: 0; }
+.opt > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.opt:hover:not(:disabled) { border-color: var(--accent); }
+.opt-key { flex: none; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; background: var(--accent-soft); color: var(--accent); }
+.opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.opt.ok { border-color: var(--ok); background: var(--ok-soft); }
+.opt.ok .opt-key { background: var(--ok); color: var(--surface); }
+.opt.bad { border-color: var(--bad); background: var(--bad-soft); }
+.opt.bad .opt-key { background: var(--bad); color: var(--surface); }
+.opt:disabled { cursor: default; }
+.exp { border-radius: 8px; padding: 10px 14px; font-size: 0.93rem; }
+.exp.is-ok { background: var(--ok-soft); } .exp.is-bad { background: var(--bad-soft); }
+.exp strong { margin-right: 4px; }
+
+/* Errores */
+.task { font-weight: 500; }
+.task .count { display: inline-block; font-size: 0.8rem; font-weight: 600; background: var(--warn-soft); color: var(--warn); padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+.err-code { background: var(--code-bg); border-radius: 8px; padding: 8px 0; overflow-x: auto; }
+.err-code-inner { min-width: max-content; }
+.ln-btn { display: flex; width: 100%; background: none; border: 0; border-left: 3px solid transparent; color: var(--code-fg); text-align: left; padding: 1px 16px 1px 0; cursor: pointer; font-family: var(--font-mono); font-size: 0.86rem; line-height: 1.65; }
+.ln-btn:hover:not(:disabled) { background: var(--code-line); }
+.ln-no { flex: none; width: 3.2em; text-align: right; padding-right: 1em; color: var(--code-muted); user-select: none; }
+.ln-src { white-space: pre; background: none; padding: 0; font-size: inherit; border-radius: 0; color: inherit; }
+.ln.sel .ln-btn { background: rgba(240, 192, 100, 0.16); border-left-color: #F0C064; }
+.ln.found .ln-btn { background: rgba(99, 207, 149, 0.16); border-left-color: #63CF95; }
+.ln.missed .ln-btn { background: rgba(245, 138, 128, 0.18); border-left-color: #F58A80; }
+.ln.fp .ln-btn { border-left-color: var(--code-muted); }
+.ln.fp .ln-src { text-decoration: line-through; text-decoration-color: #F58A80; }
+.ln-btn:disabled { cursor: default; }
+.ln-fix, .ln-res { padding: 4px 16px 8px 3.4em; display: grid; gap: 4px; font-size: 0.85rem; color: var(--code-fg); font-family: var(--font-body); }
+.ln-fix input { font-family: var(--font-mono); font-size: 0.84rem; background: var(--code-line); color: var(--code-fg); border: 1px solid #3A3E58; border-radius: 6px; padding: 5px 8px; width: min(560px, 100%); }
+.ln-res code { background: var(--code-line); color: var(--tk-s); }
+.ln-res .why { color: var(--code-muted); }
+.ln-res .tag-ok { color: #63CF95; font-weight: 600; } .ln-res .tag-bad { color: #F58A80; font-weight: 600; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.legend .l-found::before { background: #63CF95; } .legend .l-missed::before { background: #F58A80; } .legend .l-fp::before { background: var(--muted); }
+
+/* Completar */
+.blank { font-family: var(--font-mono); font-size: 0.86rem; background: var(--code-line); color: #FFFFFF; border: 0; border-bottom: 2px solid #9EA7E6; border-radius: 4px 4px 0 0; padding: 0 4px; min-width: 3ch; }
+.blank:focus { outline: none; background: #34385A; border-bottom-color: #F0C064; }
+.blank.ok { border-bottom-color: #63CF95; background: rgba(99, 207, 149, 0.18); }
+.blank.bad { border-bottom-color: #F58A80; background: rgba(245, 138, 128, 0.2); text-decoration: line-through; }
+.sol { color: #63CF95; font-weight: 600; margin-left: 4px; }
+.hint { font-size: 0.88rem; color: var(--muted); }
+
+/* Simulacro */
+.sim-plan { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.sim-part { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 2px; }
+.sim-part b { font-family: var(--font-display); font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+.sim-part span { font-size: 0.88rem; color: var(--muted); }
+.sim-section { display: grid; gap: 14px; }
+.sim-section > h3 { display: flex; justify-content: space-between; gap: 10px; padding-top: 8px; border-top: 2px solid var(--ink); }
+.sim-section > h3 small { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 400; color: var(--muted); }
+.sim-num { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.timer { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.result { display: grid; gap: 14px; }
+.result-top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.result-score { font-family: var(--font-display); font-size: 3rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.result-score small { font-size: 1.2rem; color: var(--muted); font-weight: 600; }
+.verdict { font-weight: 600; padding: 3px 12px; border-radius: 999px; }
+.verdict.ok { background: var(--ok-soft); color: var(--ok); } .verdict.bad { background: var(--bad-soft); color: var(--bad); }
+.meter { position: relative; height: 10px; background: var(--accent-soft); border-radius: 999px; overflow: hidden; }
+.meter i { position: absolute; inset: 0 auto 0 0; background: var(--accent); border-radius: 999px; }
+.meter .goal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); left: 50%; }
+.breakdown { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.breakdown td { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.breakdown td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.history { display: grid; gap: 6px; font-size: 0.9rem; }
+.history div { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--line); padding-bottom: 4px; font-variant-numeric: tabular-nums; }
+
+/* Chuleta */
+.sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 14px; }
+.sheet .card { align-content: start; }
+.sheet ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; }
+.sheet .note { font-size: 0.9rem; color: var(--muted); }
+
+@media (max-width: 520px) {
+  .card { padding: 14px; }
+  .code, .ln-btn { font-size: 0.8rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .opt, .btn, .tab { transition: border-color .15s, background-color .15s; }
+}
+</style>
+<style>
+html, body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <div class="brand">
+      <span class="tag">&lt;?php</span>
+      <h1>Recuperación PHP</h1>
+    </div>
+    <p class="sub" id="sub">Practica las tres partes del examen con lo que entra: sintaxis, formularios, mysqli, XAMPP y MVC. <strong>Llevabas un 3,85 y necesitabas un 4.</strong></p>
+    <div class="chips" id="chips"></div>
+  </header>
+
+  <div class="tabs-scroll">
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" data-v="test">Test <small>2 pts</small></button>
+      <button class="tab" role="tab" data-v="errores">Corregir errores <small>2 pts</small></button>
+      <button class="tab" role="tab" data-v="completar">Completar código <small>4 pts</small></button>
+      <button class="tab" role="tab" data-v="simulacro">Simulacro</button>
+      <button class="tab" role="tab" data-v="chuleta">Chuleta</button>
+    </nav>
+  </div>
+
+  <section class="view" id="v-test">
+    <div class="view-head">
+      <div><h2>Preguntas tipo test</h2><p>Elige la respuesta. Atajos: <span class="kbd">1</span>–<span class="kbd">4</span> para responder, <span class="kbd">Enter</span> para la siguiente.</p></div>
+      <label class="check"><input type="checkbox" id="test-fails"><span>Solo mis fallos (<span id="test-fails-n">0</span>)</span></label>
+    </div>
+    <div class="card" id="test-card"></div>
+    <div class="bar"><span class="counter" id="test-counter"></span><div class="bar-btns"><button class="btn primary" id="test-next">Siguiente</button></div></div>
+  </section>
+
+  <section class="view" id="v-errores" hidden>
+    <div class="view-head">
+      <div><h2>Encuentra y corrige los errores</h2><p>Pulsa las líneas que tienen un error y escribe cómo quedarían. Cuidado: marcar líneas correctas resta.</p></div>
+    </div>
+    <div class="card" id="errores-card"></div>
+    <div class="bar"><span class="counter" id="errores-counter"></span><div class="bar-btns"><button class="btn primary" id="errores-check">Corregir</button><button class="btn" id="errores-next">Siguiente</button></div></div>
+  </section>
+
+  <section class="view" id="v-completar" hidden>
+    <div class="view-head">
+      <div><h2>Completa el código</h2><p>Rellena los huecos. En los ejercicios «De memoria» escribes líneas enteras, como la conexión a la base de datos. Da igual usar comillas simples o dobles, o poner espacios de más.</p></div>
+      <label class="check"><input type="checkbox" id="completar-mem"><span>Solo «De memoria»</span></label>
+    </div>
+    <div class="card" id="completar-card"></div>
+    <div class="bar"><span class="counter" id="completar-counter"></span><div class="bar-btns"><button class="btn primary" id="completar-check">Corregir</button><button class="btn" id="completar-next">Siguiente</button></div></div>
+  </section>
+
+  <section class="view" id="v-simulacro" hidden>
+    <div class="view-head">
+      <div><h2>Simulacro de examen</h2><p>Mismo formato que el examen. Se corrige todo al entregar.</p></div>
+      <span class="timer" id="sim-timer"></span>
+    </div>
+    <div id="sim-intro" class="card">
+      <div class="sim-plan">
+        <div class="sim-part"><b>2 pts</b>10 preguntas tipo test<span>0,2 cada una, sin restar</span></div>
+        <div class="sim-part"><b>2 pts</b>2 códigos con errores<span>1 punto cada uno</span></div>
+        <div class="sim-part"><b>4 pts</b>2 ejercicios de código<span>uno de huecos y otro de escribir de memoria (conexión, consultas, formularios), 2 puntos cada uno</span></div>
+      </div>
+      <p class="muted">Son 8 puntos. Si sacas 4 o más aquí, llegas al 4 que te faltaba aunque el resto del examen saliera a cero.</p>
+      <div><button class="btn primary" id="sim-start">Empezar simulacro</button></div>
+      <div id="sim-history"></div>
+    </div>
+    <div id="sim-result" class="card result" hidden></div>
+    <div id="sim-body" class="view" hidden></div>
+  </section>
+
+  <section class="view" id="v-chuleta" hidden>
+    <div class="view-head"><div><h2>Chuleta para repasar</h2><p>Lo esencial de los apuntes, con lo que suele caer en cada parte.</p></div></div>
+    <div class="sheet" id="sheet"></div>
+  </section>
+</div>
+
+<script>
+/* ---------- Banco de preguntas tipo test (la opción correcta siempre es la primera; se barajan al mostrar) ---------- */
+const MC = [
+{q:"¿Cuál es la forma correcta de declarar una variable en PHP?", o:["`$nombre = 'Manolo';`","`var nombre = 'Manolo';`","`String $nombre = 'Manolo';`","`nombre = 'Manolo';`"], e:"En PHP las variables empiezan por $ y no se escribe el tipo delante."},
+{q:"En PHP, ¿hay que indicar el tipo al declarar una variable?", o:["No, el tipo se asigna cuando le damos un valor","Sí, hay que poner int, String... delante","Solo en las variables numéricas","Solo en las constantes"], e:"Es lo primero que dicen los apuntes: no se define el tipo; se asigna al darle valor."},
+{q:"¿`$variable` y `$Variable` son la misma variable?", o:["No, son distintas: PHP distingue mayúsculas y minúsculas","Sí, PHP no distingue mayúsculas","Sí, pero solo dentro de un if","Depende de la configuración de XAMPP"], e:"$variable NO es lo mismo que $Variable. Es un error típico en los ejercicios de corregir."},
+{q:"¿Qué tipo de dato es `$altura = 1.72;`?", o:["Float","Integer","String","Boolean"], e:"Los decimales son Float. Tipos de los apuntes: String (texto), Integer (enteros), Float (decimales) y Boolean (verdad o mentira)."},
+{q:"¿Qué tipo de dato es `$edad = 31;`?", o:["Integer","Float","String","Boolean"], e:"Un número sin decimales es Integer (entero)."},
+{q:"¿Qué tipo de dato es `$mayorEdad = True;`?", o:["Boolean","String","Integer","Float"], e:"True y False son Boolean: verdad o mentira."},
+{q:"¿Cómo se escribe el número decimal 1,72 en PHP?", o:["`1.72`","`1,72`","`'1,72'`","`1'72`"], e:"Los decimales se escriben usando el punto en lugar de la coma."},
+{q:"¿Cómo se puede escribir un texto (String) en PHP?", o:["Con comillas simples o dobles: `'Manolo'` o `\"Manolo\"`","Solo con comillas dobles","Solo con comillas simples","Sin comillas"], e:"Los apuntes lo indican: el texto puede ir con comillas simples o dobles."},
+{q:"¿Qué palabra convierte `$propietario` en una variable global?", o:["`global $propietario;`","`static $propietario;`","`public $propietario;`","`define $propietario;`"], e:"En los apuntes: $localizacion es local y global $propietario; la hace global."},
+{q:"¿Cómo se crea una constante en PHP (como en conexion.php)?", o:['`define("HOST_DB", "localhost");`','`$HOST_DB = constant("localhost");`','`final $HOST_DB = "localhost";`','`const $HOST_DB = "localhost";`'], e:'Con define("NOMBRE", valor). Las constantes no llevan $.'},
+{q:'Tras `define("HOST_DB", "localhost");`, ¿cómo se obtiene su valor en conexion.php?', o:['`constant("HOST_DB")`','`$HOST_DB`','`define("HOST_DB")`','`$_GET["HOST_DB"]`'], e:'En conexion.php se usa constant("HOST_DB") dentro de new mysqli(...).'},
+{q:"¿Qué instrucción usamos para mostrar información por pantalla?", o:["`echo`","`console.log`","`System.out.println`","`write`"], e:"echo muestra texto o variables por pantalla."},
+{q:"¿Qué operador une textos y variables, como en `echo $fila['nombre'] . \"<br/>\";`?", o:["`.` (punto)","`+` (más)","`&`","`,` (coma)"], e:"El punto concatena. El + es para sumar números."},
+{q:"¿Cuál de estas NO es una forma válida de comentar en PHP?", o:["`-- comentario`","`// comentario`","`# comentario`","`/* comentario */`"], e:"PHP admite // y # para una línea y /* */ para varias. -- es de SQL."},
+{q:"¿Qué tiene de especial `#` en PHP?", o:["Sirve para comentar una sola línea, como //","Sirve para comentar varias líneas","Declara una constante","Indica una variable global"], e:"Además de // y /* */, PHP permite comentar una línea con #."},
+{q:"¿Qué instrucción muestra todo lo que llega en `$_GET` o `$_POST`?", o:["`print_r($_GET);`","`echo $_GET;`","`show($_GET);`","`isset($_GET);`"], e:"print_r muestra el contenido del array, como en get_post.php."},
+{q:"¿Qué extensión deben tener los archivos con los que trabajamos?", o:["`.php`","`.html`","`.txt`","`.java`"], e:"Los archivos deben tener extensión .php para que se ejecute el código PHP."},
+{q:"Con XAMPP en Windows, ¿dónde se guardan los archivos del proyecto?", o:["`C:\\xampp\\htdocs\\nombrecarpeta`","`C:\\xampp\\php\\nombrecarpeta`","`C:\\xampp\\mysql\\nombrecarpeta`","En el Escritorio, da igual la carpeta"], e:"Dentro de htdocs se crea la carpeta del proyecto con los ficheros .php."},
+{q:"¿Qué servicio de XAMPP hay que activar SIEMPRE?", o:["Apache","MySQL","FileZilla","Mercury"], e:"Sin Apache no hay acceso a la aplicación desde el navegador. MySQL solo si trabajas con base de datos."},
+{q:"¿Cuándo hace falta activar MySQL en XAMPP?", o:["Cuando necesitamos trabajar con una base de datos en local","Siempre, igual que Apache","Nunca, PHP no lo usa","Solo para subir ficheros"], e:"Apache siempre; MySQL solo si usamos base de datos."},
+{q:"¿Qué aplicación de XAMPP abres para activar Apache y MySQL?", o:["`xampp_control`","`php.exe`","Visual Studio Code","El navegador"], e:"En C:\\xampp está xampp_control, el panel desde el que se activan los servicios."},
+{q:"Tienes `form.php` en `C:\\xampp\\htdocs\\tienda`. ¿Qué URL escribes en el navegador?", o:["`localhost/tienda/form.php`","`C:/xampp/htdocs/tienda/form.php`","`localhost/htdocs/tienda/form.php`","`tienda/form.php`"], e:"localhost/\"nombrecarpeta\"/form.php. htdocs no se escribe en la URL."},
+{q:"¿Cuál es la diferencia entre GET y POST?", o:["GET envía los datos en la URL y se ven (unos 2000 caracteres); POST no los muestra en la URL","POST envía los datos en la URL y GET no","GET solo sirve para números","No hay ninguna diferencia"], e:"Por eso POST se considera más seguro."},
+{q:'Un formulario con `method="post"` tiene `<input type="text" name="usuario">`. ¿Cómo lees el valor?', o:["`$_POST['usuario']`","`$_GET['usuario']`","`$POST['usuario']`","`$_POST(usuario)`"], e:"El método del formulario decide el array: post → $_POST, get → $_GET."},
+{q:"¿Qué atributo del input decide el nombre con el que llega el dato a `$_POST` o `$_GET`?", o:["`name`","`id`","`value`","`type`"], e:"En index.php: name=\"usuario\" llega como $_POST['usuario']."},
+{q:"¿Qué hace `isset($_GET['usuario'])`?", o:["Comprueba que existe 'usuario' dentro del array $_GET","Le da un valor a 'usuario'","Borra 'usuario' de la URL","Muestra el valor de 'usuario'"], e:"Así se comenta en get_post.php: isset comprueba que existe."},
+{q:"¿Cómo compruebas que los datos llegan por POST?", o:['`if ($_SERVER["REQUEST_METHOD"] == "POST")`','`if ($_POST == "POST")`','`if (REQUEST_METHOD == "POST")`','`if ($_SERVER["POST"])`'], e:'Es la línea que aparece en get_post.php.'},
+{q:"¿Qué atributo de `<form>` indica el archivo PHP que recibirá los datos?", o:["`action`","`method`","`enctype`","`name`"], e:'En index.php: action="get_post.php".'},
+{q:"¿Qué necesita el formulario para poder enviar un fichero?", o:['`method="post"` y `enctype="multipart/form-data"`','Solo `method="get"`','`action="fichero"`','`type="multipart"` en el botón'], e:"Así está el formulario de index.php. Sin enctype multipart/form-data, el fichero no llega."},
+{q:"¿En qué variable llega la información de un fichero enviado?", o:["`$_FILES`","`$_POST`","`$_FILE`","`$_GET`"], e:"Es $_FILES, en plural."},
+{q:"¿Qué muestra `print_r($_FILES);`?", o:["La información del fichero enviado, que es un array","El contenido de texto del fichero","La lista de archivos de htdocs","Nada, da error"], e:"En get_post.php: muestra la información del fichero; es un array y se puede acceder por elementos."},
+{q:'¿Qué hace `require_once "conexion.php";` al principio de bdInfo1.php?', o:["Incluye conexion.php (solo una vez) para poder usar $conexion","Abre conexion.php en otra pestaña","Crea la base de datos","Descarga el archivo conexion.php"], e:"Indicamos que necesitaremos la conexión. Con _once no se incluye dos veces."},
+{q:"¿Cuál es el orden correcto de los parámetros de `new mysqli(...)`?", o:["servidor, usuario, contraseña, base de datos","base de datos, servidor, usuario, contraseña","usuario, contraseña, servidor, base de datos","servidor, base de datos, usuario, contraseña"], e:"HOST_DB, USER_DB, PASS_DB, NAME_DB, como en conexion.php."},
+{q:"En conexion.php, ¿qué usuario y contraseña se usan para MySQL de XAMPP?", o:['Usuario `root` y contraseña vacía `""`','`admin` / `admin`','`root` / `root`','`test` / `test`'], e:"USER_DB es root y PASS_DB está vacío. La base de datos se llama test."},
+{q:"¿Cómo hace la consulta bdInfo1.php?", o:['`$conexion->query("select * from alumnos")`','`$conexion.query("select * from alumnos")`','`query("select * from alumnos")`','`$conexion::query("select * from alumnos")`'], e:"Se usa la flecha -> sobre el objeto $conexion."},
+{q:"¿Cuál es la llamada que usa infoBD.php?", o:["`mysqli_query($conexion, $sql)`","`mysqli_query($sql, $conexion)`","`mysqli_query($sql)`","`mysql_query($conexion)`"], e:"Primero la conexión y después la consulta."},
+{q:"¿Qué devuelve `mysqli_num_rows($resultados)`?", o:["El número de filas que hay en el resultado","El número de columnas","La primera fila","El nombre de la tabla"], e:'En infoBD.php se usa para mostrar "No hay alumnos disponibles" si devuelve 0.'},
+{q:"¿Por qué se usa `while ($fila = mysqli_fetch_assoc($resultados))`?", o:["Cada vuelta coge la siguiente fila y el bucle acaba cuando no quedan","Porque devuelve todas las filas de golpe","Porque foreach no existe en PHP","Porque devuelve el número de filas"], e:"Cuando ya no hay más filas, la condición deja de cumplirse y el while termina."},
+{q:"¿Cómo lees la columna nombre de una fila `$fila`?", o:["`$fila['nombre']`","`$fila.nombre`","`$fila(nombre)`","`$fila->nombre()`"], e:"Como en infoBD.php: $fila['nombre'] y $fila['apellido']."},
+{q:"¿Qué muestra este código?", c:`$x = 2;
+switch ($x) {
+    case 1: echo "A";
+    case 2: echo "B";
+    case 3: echo "C"; break;
+}`, o:["`BC`","`B`","`ABC`","`C`"], e:"Sin break en el case 2, la ejecución sigue en el case 3 hasta encontrar un break. Igual que en Java."},
+{q:"¿Qué muestra este código?", c:`$variable = 1;
+while ($variable < 4):
+    echo $variable;
+    $variable++;
+endwhile;`, o:["`123`","`1234`","`0123`","Bucle infinito"], e:"Empieza en 1 y para cuando $variable vale 4, sin imprimirlo."},
+{q:"Un while escrito como `while ($variable < 1000):` ¿cómo se cierra?", o:["`endwhile;`","`}`","`end;`","No hace falta cerrarlo"], e:"Los apuntes insisten: hay que cerrar siempre el while o da error."},
+{q:"¿Qué muestra este código?", c:`$variable1 = 5;
+$variable2 = 5;
+if ($variable1 >= $variable2) {
+    echo "mayor o igual";
+} else {
+    echo "menor";
+}`, o:["`mayor o igual`","`menor`","Nada","Las dos cosas"], e:">= es mayor o igual: 5 >= 5 es cierto."},
+{q:"¿Qué muestra este código?", c:`for ($i = 1; $i < 5; $i++) {
+    echo $i;
+}`, o:["`1234`","`12345`","`01234`","`2345`"], e:"Empieza en 1 y para cuando $i vale 5, sin imprimirlo."},
+{q:"¿Qué muestra este código?", c:`$array = array(1, 2, 3, 4);
+foreach ($array as $valor) {
+    echo "$valor";
+}`, o:["`1234`","`$valor$valor$valor$valor`","`4`","`Array`"], e:"foreach recorre cada elemento del array y lo guarda en $valor."},
+{q:"¿Cuál es la sintaxis correcta de foreach?", o:["`foreach ($array as $valor)`","`foreach ($valor in $array)`","`for each ($array : $valor)`","`foreach ($array => $valor)`"], e:"Primero el array, luego as y la variable de cada elemento."},
+{q:"¿Cómo se crea el array de los apuntes con 1, 2, 3 y 4?", o:["`$array = array(1, 2, 3, 4);`","`$array = {1, 2, 3, 4};`","`$array = new array(1, 2, 3, 4);`","`int[] $array = {1, 2, 3, 4};`"], e:"Con array(...)."},
+{q:"¿Qué pasa con `if ($variable = 500)`?", o:["Asigna 500 a la variable en vez de compararla, y la condición se cumple siempre","Compara correctamente la variable con 500","Da un error de sintaxis","No entra nunca en el if"], e:"= asigna y == compara. Para comparar hay que escribir if ($variable == 500)."},
+{q:"¿A qué equivale `<?= $p['nombre'] ?>` en una vista?", o:["`<?php echo $p['nombre']; ?>`","`<?php $p['nombre']; ?>`","`<?php print_r($_GET); ?>`","`<?php isset($p['nombre']); ?>`"], e:"Es una forma corta de echo; se usa en la vista de productos."},
+{q:"En la vista de productos, ¿para qué se usa `htmlspecialchars($p['nombre'])`?", o:["Para mostrar el texto de forma segura, sin que se interprete como código HTML","Para poner el texto en negrita","Para consultar la base de datos","Para pasar el texto a mayúsculas"], e:"Convierte caracteres como < y > para que el navegador los muestre como texto."},
+{q:"¿Qué sintaxis de foreach se usa en las vistas MVC?", o:["`<?php foreach ($productos as $p): ?> ... <?php endforeach; ?>`","`<?php foreach ($productos as $p) ?> ... <?php end; ?>`","`<?php foreach: ?> ... <?php /foreach ?>`","`{% for p in productos %}`"], e:"Los dos puntos abren el bloque y endforeach; lo cierra (como while ... endwhile)."},
+{q:"En MVC, ¿qué capa es la única que habla con la base de datos?", o:["El Modelo","La Vista","El Controlador","Las tres por igual"], e:"Modelo: datos y reglas de negocio."},
+{q:"En MVC, ¿qué hace la Vista?", o:["Presenta en HTML los datos que recibe","Ejecuta las consultas SQL","Decide qué controlador se ejecuta","Crea la conexión a la base de datos"], e:"La vista nunca consulta la base de datos."},
+{q:"En MVC, ¿qué hace el Controlador?", o:["Recibe la petición, pide datos al modelo y elige la vista","Imprime el HTML de la página","Contiene las consultas SQL","Guarda los datos en la base de datos"], e:"El controlador nunca imprime HTML: solo coordina."},
+{q:"En MVC, ¿en qué orden trabajan las capas?", o:["Controlador → Modelo → Vista","Vista → Modelo → Controlador","Modelo → Vista → Controlador","Vista → Controlador → Modelo"], e:"El controlador pide los datos al modelo y después carga la vista para mostrarlos."},
+{q:"¿Qué problema tiene meterlo todo en un mismo archivo como `productos.php`?", o:["Conexión y SQL repetidos, HTML y lógica mezclados y difíciles de leer y probar","Que PHP no lo puede ejecutar","Que no funciona con XAMPP","Ninguno, es lo recomendado"], e:"MVC lo soluciona separando responsabilidades: SQL en el modelo y HTML en la vista."},
+{q:"¿Cuál de estas NO es una ventaja de MVC según los apuntes?", o:["Hace que la página cargue más rápido","Responsabilidades separadas","Mantenimiento más fácil","Trabajo en equipo: back-end y front-end en archivos distintos"], e:"Las ventajas son: responsabilidades separadas, mantenimiento, trabajo en equipo, y reutilización y pruebas."},
+{q:"¿Qué framework usa esta misma arquitectura, según los apuntes?", o:["Laravel","React","Bootstrap","jQuery"], e:"Por eso es importante entender bien MVC antes de usar Laravel."},
+{q:"¿Cómo llama el controlador al método estático `todos()` de `Producto`?", o:["`Producto::todos()`","`Producto->todos()`","`Producto.todos()`","`todos(Producto)`"], e:"Los métodos static se llaman con ::."},
+{q:"En el modelo, ¿qué devuelve `fetchAll(PDO::FETCH_ASSOC)`?", o:["Todas las filas de la consulta, cada una con sus columnas por nombre","Solo la primera fila","El número de filas","El texto de la consulta SQL"], e:"Por eso la vista puede hacer foreach ($productos as $p) y $p['nombre']."},
+{q:"En MVC, ¿en qué archivo va la consulta `SELECT nombre, precio FROM productos`?", o:["En el Modelo (app/Models/Producto.php)","En la Vista (app/Views/productos.php)","En el Controlador","En cualquiera, da igual"], e:"El SQL siempre va en el modelo; el HTML en la vista."},
+{q:"¿Qué hace `require 'Views/productos.php';` dentro del controlador?", o:["Carga la vista para mostrar los productos que ha pedido al modelo","Consulta la base de datos","Crea la tabla productos","Borra la vista"], e:"El controlador pide los datos al modelo y elige la vista."}
+];
+
+/* ---------- Ejercicios de corregir errores (líneas numeradas desde 1) ---------- */
+const ERR = [
+{t:"Aprobado o suspendido", d:"Debe mostrar si el alumno ha aprobado.", c:`<?php
+$nota = 7
+if ($Nota >= 5) {
+    echo "Aprobado";
+} else {
+    echo "Suspendido"
+}
+?>`, e:{2:['$nota = 7;','Falta el ; al final de la instrucción.'], 3:['if ($nota >= 5) {','$Nota y $nota son variables distintas: PHP distingue mayúsculas.'], 6:['    echo "Suspendido";','Falta el ; al final del echo.']}},
+{t:"Los primeros números", d:"Debe mostrar 0, 1 y 2, uno por línea.", c:`<?php
+for (i = 0; i < 3; i++) {
+    echo $i + "<br>";
+}
+?>`, e:{2:['for ($i = 0; $i < 3; $i++) {','Las variables siempre llevan $.'], 3:['    echo $i . "<br>";','Para unir textos se usa el punto. El + es para sumar.']}},
+{t:"Recorrer un array", d:"Debe mostrar 1234.", c:`<?php
+$array = array(1, 2, 3, 4)
+foreach ($array in $valor) {
+    echo "$valor";
+}
+?>`, e:{2:['$array = array(1, 2, 3, 4);','Falta el ;.'], 3:['foreach ($array as $valor) {','foreach usa as, no in.']}},
+{t:"Día de la semana", d:"Con $dia = 2 debe mostrar solo «Martes».", c:`<?php
+$dia = 2;
+switch ($dia) {
+    case 1:
+        echo "Lunes";
+        break;
+    case 2:
+        echo "Martes";
+    case 3
+        echo "Miércoles";
+        break;
+}
+?>`, e:{8:['        echo "Martes"; break;','Falta el break: con $dia = 2 mostraría «MartesMiércoles».'], 9:['    case 3:','Cada case termina con dos puntos.']}},
+{t:"Cuenta de vueltas", d:"Debe mostrar Vuelta 1 hasta Vuelta 5.", c:`<?php
+$contador = 1;
+while ($contador <= 5) {
+    echo "Vuelta " $contador . "<br>";
+    $contador--;
+}
+?>`, e:{4:['    echo "Vuelta " . $contador . "<br>";','Falta el punto para concatenar.'], 5:['    $contador++;','Con -- el contador nunca supera 5: bucle infinito.']}},
+{t:"While con endwhile", d:"Debe mostrar los números del 1 al 9.", c:`<?php
+$variable = 1;
+while ($variable < 10)
+    echo $variable
+    $variable++;
+endwhile;
+?>`, e:{3:['while ($variable < 10):','Si se cierra con endwhile, el while necesita dos puntos.'], 4:['    echo $variable;','Falta el ;.']}},
+{t:"La mitad de las comprobaciones", d:"Debe avisar solo cuando $variable vale 500 y mostrar cada número.", c:`<?php
+for ($variable = 1; $variable < 1000; $variable++) {
+    if ($variable = 500) {
+        echo "Ya se han hecho la mitad de las comprobaciones";
+    }
+    echo $Variable;
+}
+?>`, e:{3:['    if ($variable == 500) {','= asigna. Para comparar se usa ==.'], 6:['    echo $variable;','$Variable con mayúscula es otra variable distinta.']}},
+{t:"Tipos de variables", d:"Manolo tiene 31 años, mide 1,72 m y es mayor de edad.", c:`<?php
+$nombre = 'Manolo;
+$edad = 31;
+$altura = 1,72;
+mayorEdad = True;
+?>`, e:{2:["$nombre = 'Manolo';",'Falta cerrar la comilla del texto.'], 4:['$altura = 1.72;','Los decimales se escriben con punto, no con coma.'], 5:['$mayorEdad = True;','Las variables siempre llevan $.']}},
+{t:"Formulario por POST", d:"form.php envía el nombre y procesar.php saluda al usuario.", c:`<form method="post" action="procesar.php">
+    Nombre: <input type="text" id="usuario">
+    <input type="submit" value="Enviar">
+</form>
+
+<?php // procesar.php
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (isset($_GET['usuario'])) {
+        echo "Hola " . $_POST['usuario'];
+    }
+}
+?>`, e:{2:['    Nombre: <input type="text" name="usuario">','Sin atributo name el dato no se envía. El id no cuenta.'], 8:["    if (isset($_POST['usuario'])) {",'El formulario usa method="post": hay que mirar en $_POST.']}},
+{t:"Enviar un fichero", d:"Debe enviar un fichero y mostrar su información.", c:`<form method="get" action="get_post.php">
+    Fichero: <input type="file" name="fichero">
+    <input type="submit" name="Enviar" value="Enviar">
+</form>
+
+<?php // get_post.php
+print_r($_FILE);
+?>`, e:{1:['<form method="post" action="get_post.php" enctype="multipart/form-data">','Para enviar ficheros hacen falta method="post" y enctype="multipart/form-data".'], 7:['print_r($_FILES);','La variable es $_FILES, en plural.']}},
+{t:"Conexión a la base de datos", d:"conexion.php debe conectar con la BD test de XAMPP.", c:`<?php
+define(HOST_DB, "localhost");
+define("USER_DB", "root");
+define("PASS_DB", "");
+define("NAME_DB", "test");
+
+$conexion = new mysqli(
+    constant("HOST_DB"),
+    constant("USER_DB")
+    constant("PASS_DB"),
+    constant("NAME_DB")
+);
+?>`, e:{2:['define("HOST_DB", "localhost");','El nombre de la constante va entre comillas.'], 9:['    constant("USER_DB"),','Falta la coma entre parámetros.']}},
+{t:"Lista de alumnos", d:"Debe listar los alumnos o avisar si no hay ninguno.", c:`<?php
+require_once "conexion.php"
+$sql = "select * from alumnos";
+$resultados = mysqli_query($sql, $conexion);
+$num_filas = mysqli_num_rows($resultados);
+if ($num_filas = 0) {
+    echo "<p>No hay alumnos</p>";
+} else {
+    while ($fila = mysqli_fetch_assoc($resultados)) {
+        echo $fila['nombre'] . "<br/>";
+    }
+}
+?>`, e:{2:['require_once "conexion.php";','Falta el ;.'], 4:['$resultados = mysqli_query($conexion, $sql);','Primero va la conexión y después la consulta.'], 6:['if ($num_filas == 0) {','= asigna; para comparar se usa ==.']}},
+{t:"Tabla de alumnos", d:"Debe pintar una fila de tabla por alumno.", c:`<table>
+<?php
+while ($fila = mysqli_fetch_assoc($resultados) {
+    echo "<tr>";
+    echo "<td>" . $fila[nombre] . "</td>";
+    echo "</tr>";
+}
+?>
+</table>`, e:{3:['while ($fila = mysqli_fetch_assoc($resultados)) {','Falta cerrar el paréntesis del while.'], 5:["    echo \"<td>\" . $fila['nombre'] . \"</td>\";",'El nombre de la columna va entre comillas.']}},
+{t:"Consulta con la conexión", d:"bdInfo1.php debe mostrar el nombre de todos los alumnos.", c:`<?php
+require_once "conexion.php";
+$resultado = $conexion.query("select * from alumnos");
+while ($row = mysqli_fetch_array($resultado)) {
+    echo $row["nombre"] . "<br/>";
+}
+?>`, e:{3:['$resultado = $conexion->query("select * from alumnos");','Los métodos de un objeto se llaman con ->, no con punto.']}},
+{t:"Parámetro por GET", d:"Con la URL buscar.php?ciudad=Girona debe mostrar «Buscando en Girona».", c:`<?php
+if (isset($_GET["ciudad"]) {
+    $ciudad = $_GET("ciudad");
+    echo "Buscando en " . $ciudad;
+} else {
+    echo "Falta la ciudad";
+}
+?>`, e:{2:['if (isset($_GET["ciudad"])) {','Falta un paréntesis: uno cierra isset y otro el if.'], 3:['    $ciudad = $_GET["ciudad"];','$_GET es un array: se accede con corchetes, no con paréntesis.']}},
+{t:"Controlador MVC", d:"El controlador debe pedir los productos y cargar la vista.", c:`class ProductoController {
+    public function index(): void {
+        $productos = Producto->todos();
+        echo "<h1>Productos</h1>";
+        require 'Views/productos.php';
+    }
+}`, e:{3:['        $productos = Producto::todos();','todos() es estático: se llama con ::.'], 4:['','El controlador nunca imprime HTML. Esta línea sobra: el título va en la vista.']}},
+{t:"Vista MVC", d:"La vista debe mostrar el nombre de cada producto en una lista.", c:`<h1>Productos</h1>
+<ul>
+<?php foreach ($productos as $p) ?>
+    <li><?php $p['nombre'] ?></li>
+<?php endforeach; ?>
+</ul>`, e:{3:['<?php foreach ($productos as $p): ?>','Con endforeach, el foreach necesita los dos puntos.'], 4:["    <li><?= htmlspecialchars($p['nombre']) ?></li>",'Sin echo (o <?=) no se muestra nada.']}}
+];
+
+/* ---------- Ejercicios de completar: {{respuesta|alternativa}} ---------- */
+const FILL = [
+{t:"Variables y constantes", d:"Manolo tiene 31 años, mide 1,72 m y es mayor de edad. Completa las variables, la constante y la salida.", c:`<?php
+// Variables
+$nombre = 'Manolo';
+$edad = {{31}};
+$altura = {{1.72}};
+$mayorEdad = {{True|true}};
+
+// Constante con el nombre del centro
+{{define}}("CENTRO", "ILERNA");
+
+// Mostrar por pantalla
+{{echo}} "Me llamo " {{.}} $nombre;
+{{#|//}} Comentario de una línea estilo consola
+?>`},
+{t:"Conexión con constantes", d:"Completa conexion.php para conectar a la BD test de XAMPP (usuario root, sin contraseña).", c:`<?php
+// Variables necesarias para la conexión
+{{define}}("HOST_DB", "localhost");
+define("USER_DB", {{"root"}});
+define("PASS_DB", {{""}});
+define("NAME_DB", "test");
+
+// Crear la conexión a la base de datos
+$conexion = {{new mysqli}}(
+    {{constant}}("HOST_DB"),
+    constant("USER_DB"),
+    constant("PASS_DB"),
+    constant("NAME_DB")
+);
+?>`},
+{t:"Listado de alumnos", d:"Completa infoBD.php: incluye la conexión, consulta los alumnos y muéstralos, o avisa si no hay.", c:`<?php
+    {{require|require_once}} "conexion.php";
+?>
+<?php
+    $sql = "select * from alumnos";
+    $resultados = {{mysqli_query}}($conexion, $sql);
+    $num_filas = {{mysqli_num_rows}}($resultados);
+
+    if ($num_filas {{==}} 0) {
+        echo "<p>No hay alumnos disponibles</p>";
+    } else {
+        {{while}} ($fila = {{mysqli_fetch_assoc|mysqli_fetch_array}}($resultados)) {
+            echo $fila[{{'nombre'}}] . "<br/>";
+        }
+    }
+?>`},
+{t:"Tabla de alumnos", d:"Completa bdInfo1.php para que pinte una tabla con nombre y apellido.", c:`<?php {{require_once|require}} "conexion.php"; ?>
+<table>
+    <tr><th>Nombre</th><th>Apellido</th></tr>
+    <?php
+    $resultado = $conexion{{->}}query("select * from alumnos");
+    while ($row = {{mysqli_fetch_array|mysqli_fetch_assoc}}($resultado)) {
+        echo {{"<tr>"}};
+        echo "<td>" . $row["nombre"] . "</td>";
+        echo "<td>" . {{$row["apellido"]}} . "</td>";
+        echo "</tr>";
+    }
+    ?>
+</table>`},
+{t:"Formulario y procesado POST", d:"El formulario envía el usuario a procesar.php, que comprueba que llega por POST y lo saluda.", c:`<form method="{{post|POST}}" action="{{procesar.php}}">
+    Usuario: <input type="text" name="{{usuario}}">
+    <input type="submit" value="Enviar">
+</form>
+
+<?php // procesar.php
+if ($_SERVER[{{"REQUEST_METHOD"}}] == "POST") {
+    if ({{isset}}($_POST['usuario'])) {
+        echo "Bienvenido, " {{.}} {{$_POST['usuario']}};
+    }
+}
+?>`},
+{t:"Enviar nombre y fichero", d:"Completa index.php y get_post.php: el formulario envía un nombre y un fichero, y get_post.php muestra la información recibida.", c:`<form method="{{post|POST}}" action="get_post.php" enctype="{{multipart/form-data}}">
+    Nombre: <input type="text" name="usuario">
+    Fichero: <input type="{{file}}" name="fichero">
+    <input type="{{submit}}" name="Enviar" value="Enviar">
+</form>
+
+<?php // get_post.php
+// Mostrar lo que llega del formulario
+{{print_r}}({{$_POST}});
+// Mostrar la información del fichero
+print_r({{$_FILES}});
+?>`},
+{t:"Buscar por GET", d:"buscar.php?ciudad=Barcelona debe mostrar la ciudad o avisar si falta.", c:`<?php
+if ({{isset}}({{$_GET}}['ciudad'])) {
+    echo "Buscando en: " . $_GET['ciudad'];
+} {{else}} {
+    echo "Falta el parámetro ciudad";
+}
+?>`},
+{t:"Los tres bucles", d:"1) Muestra del 1 al 10 con for. 2) Muestra cada elemento del array con foreach. 3) Muestra del 1 al 9 con while ... endwhile.", c:`<?php
+// 1) Números del 1 al 10
+for ({{$i = 1}}; $i <= 10; {{$i++|++$i|$i += 1|$i = $i + 1}}) {
+    echo $i;
+}
+
+// 2) Cada elemento del array
+$array = {{array}}(1, 2, 3, 4);
+foreach ($array {{as}} $valor) {
+    echo "$valor";
+}
+
+// 3) Del 1 al 9
+$variable = 1;
+while ($variable < 10){{:}}
+    echo $variable;
+    {{$variable++|++$variable|$variable += 1|$variable = $variable + 1}};
+{{endwhile}};
+?>`},
+{t:"Condicional y switch", d:"Muestra si se ha aprobado y, según $dia, el nombre del día.", c:`<?php
+$nota = 7;
+{{if}} ($nota {{>=}} 5) {
+    echo "Aprobado";
+} {{else}} {
+    echo "Suspendido";
+}
+
+$dia = "lunes";
+switch ({{$dia}}) {
+    {{case}} "lunes":
+        echo "Empieza la semana";
+        {{break}};
+    case "viernes":
+        echo "Casi fin de semana";
+        break;
+}
+?>`},
+{t:"Notas de la clase", d:"Recorre las notas, cuenta los aprobados (5 o más) y muestra las suspendidas.", c:`<?php
+$notas = array(3.85, 6, 7.5, 4, 9);
+$aprobados = 0;
+{{foreach}} ($notas as {{$nota}}) {
+    if ($nota {{>=}} 5) {
+        {{$aprobados++|++$aprobados|$aprobados += 1|$aprobados = $aprobados + 1}};
+    } {{else}} {
+        echo "Suspendido con " . $nota . "<br>";
+    }
+}
+echo "Aprobados: " . $aprobados;
+?>`},
+{t:"MVC: modelo y controlador", d:"El modelo consulta los productos con PDO. El controlador los pide y carga la vista.", c:`<?php
+// app/Models/Producto.php
+class Producto {
+    public {{static}} function todos() {
+        $pdo = new {{PDO}}($dsn, $u, $p);
+        return $pdo->query('SELECT nombre, precio FROM productos')
+                   ->{{fetchAll}}(PDO::FETCH_ASSOC);
+    }
+}
+
+// app/Controllers/ProductoController.php
+{{class}} ProductoController {
+    public function index(): void {
+        $productos = {{Producto::todos()}};
+        {{require|require_once}} 'Views/productos.php';
+    }
+}`},
+{t:"MVC: la vista", d:"La vista recibe $productos del controlador y muestra el nombre de cada uno en una lista.", c:`<!-- app/Views/productos.php -->
+<h1>Productos</h1>
+<ul>
+<?php {{foreach}} ({{$productos}} as $p){{:}} ?>
+    <li>{{<?=}} htmlspecialchars({{$p['nombre']}}) ?></li>
+<?php {{endforeach}}; ?>
+</ul>`}
+];
+
+/* ---------- Chuleta ---------- */
+const SHEET = [
+{h:"Variables y tipos", code:`<?php
+$nombre = 'Manolo';    // String: comillas simples o dobles
+$edad = 31;            // Integer
+$altura = 1.72;        // Float: decimales con punto
+$mayorEdad = True;     // Boolean
+
+global $propietario;   // variable global
+define("IVA", 21);     // constante, sin $
+echo constant("IVA");
+
+echo "Hola " . $nombre;   // el punto une textos
+?>`, list:["No se escribe el tipo: se asigna al dar el valor.","$variable y $Variable son variables distintas.","Toda instrucción acaba en ;"]},
+{h:"Comentarios", code:`// comentario de una línea
+/* comentario de
+   varias líneas */
+# comentario de una línea (estilo consola)`, list:[]},
+{h:"Condicionales", code:`if ($variable1 >= $variable2) {
+    echo "mayor o igual";
+} else {
+    echo "menor";
+}
+
+switch ($nombreVariable) {
+    case "valor1":
+        echo "contiene valor1";
+        break;
+    case "valor2":
+        echo "contiene valor2";
+        break;
+}`, list:["= asigna y == compara. if ($x = 500) es un error típico.","Sin break, el switch sigue ejecutando el siguiente case."]},
+{h:"Bucles", code:`$variable = 1;
+while ($variable < 1000):
+    echo $variable;
+    $variable++;
+endwhile;
+
+$array = array(1, 2, 3, 4);
+foreach ($array as $valor) {
+    echo "$valor";
+}
+
+for ($variable = 1; $variable < 1000; $variable++) {
+    echo $variable;
+}`, list:["El while hay que cerrarlo siempre (con } o con endwhile;).","Si el contador no avanza, el bucle es infinito."]},
+{h:"Formularios", code:`<form method="post" action="get_post.php"
+      enctype="multipart/form-data">
+    Nombre: <input type="text" name="usuario">
+    Fichero: <input type="file" name="fichero">
+    <input type="submit" name="Enviar" value="Enviar">
+</form>
+
+<?php // get_post.php
+print_r($_GET);
+if (isset($_GET['usuario'])) {
+    print_r($_GET['usuario']);
+}
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    print_r($_POST['usuario']);
+}
+print_r($_FILES);`, list:["GET: los datos se ven en la URL (máximo unos 2000 caracteres). POST: no se ven.","La clave del array es el name del input, no el id.","Ficheros: method post + enctype multipart/form-data, y se leen en $_FILES."]},
+{h:"Base de datos con mysqli", code:`<?php // conexion.php
+define("HOST_DB", "localhost");
+define("USER_DB", "root");
+define("PASS_DB", "");
+define("NAME_DB", "test");
+$conexion = new mysqli(
+    constant("HOST_DB"), constant("USER_DB"),
+    constant("PASS_DB"), constant("NAME_DB"));
+
+<?php // bdInfo1.php
+require_once "conexion.php";
+$resultado = $conexion->query("select * from alumnos");
+while ($row = mysqli_fetch_array($resultado)) {
+    echo $row["nombre"] . "<br/>";
+}
+
+<?php // infoBD.php
+require "conexion.php";
+$resultados = mysqli_query($conexion, "select * from alumnos");
+if (mysqli_num_rows($resultados) == 0) {
+    echo "No hay alumnos disponibles";
+}
+while ($fila = mysqli_fetch_assoc($resultados)) {
+    echo $fila['nombre'];
+}`, list:["Orden de new mysqli: servidor, usuario, contraseña, base de datos.","mysqli_query: primero la conexión, luego el SQL.","$conexion->query con flecha, no con punto."]},
+{h:"MVC", code:`// Modelo: el único que habla con la BD
+class Producto {
+    public static function todos() {
+        $pdo = new PDO($dsn, $u, $p);
+        return $pdo->query('SELECT nombre, precio FROM productos')
+                   ->fetchAll(PDO::FETCH_ASSOC);
+    }
+}
+// Controlador: coordina, sin SQL ni HTML
+class ProductoController {
+    public function index(): void {
+        $productos = Producto::todos();
+        require 'Views/productos.php';
+    }
+}
+// Vista
+<?php foreach ($productos as $p): ?>
+    <li><?= htmlspecialchars($p['nombre']) ?></li>
+<?php endforeach; ?>`, list:["Orden: el controlador pide los datos al modelo y carga la vista.","El controlador nunca imprime HTML y la vista nunca consulta la BD.","Ventajas: responsabilidades separadas, mantenimiento, trabajo en equipo, reutilización y pruebas. Laravel usa MVC."]},
+{h:"XAMPP", code:"", list:["Abrir xampp_control (en C:\\xampp).","Activar Apache siempre; MySQL solo si hay base de datos.","Archivos .php en C:\\xampp\\htdocs\\nombrecarpeta.","Abrir en el navegador: localhost/nombrecarpeta/form.php."]},
+{h:"Lo que más cae en «corregir errores»", code:"", list:["Falta ; o falta cerrar un paréntesis, una llave o una comilla.","Variable sin $ o con mayúsculas distintas.","+ en lugar de . para unir textos.","= en lugar de == dentro de un if.","Decimal con coma en vez de punto.","$_GET cuando el form es post, $_FILE sin S, input sin name.","Falta break en el switch o los dos puntos de un case.","foreach con in en lugar de as.","Contador que no avanza: bucle infinito.","$conexion.query en vez de $conexion->query; mysqli_query con los parámetros al revés."]}
+];
+
+/* ---------- Ejercicios de escribir de memoria (líneas completas) ---------- */
+FILL.push(
+{m:true, t:"De memoria: conexion.php", d:"Escribe tú cada línea completa. Servidor localhost, usuario root, sin contraseña, base de datos test.", c:`<?php
+// 1) Las cuatro constantes de la conexión
+{{define("HOST_DB", "localhost");}}
+{{define("USER_DB", "root");}}
+{{define("PASS_DB", "");}}
+{{define("NAME_DB", "test");}}
+
+// 2) Crea la conexión en $conexion usando las constantes
+{{$conexion = new mysqli(constant("HOST_DB"), constant("USER_DB"), constant("PASS_DB"), constant("NAME_DB"));|$conexion = new mysqli(HOST_DB, USER_DB, PASS_DB, NAME_DB);|$conexion = new mysqli("localhost", "root", "", "test");}}
+?>`},
+{m:true, t:"De memoria: listar alumnos", d:"Escribe las líneas que faltan para mostrar el nombre de todos los alumnos, o avisar si no hay.", c:`<?php
+// 1) Incluye el archivo de la conexión
+{{require "conexion.php";|require_once "conexion.php";}}
+
+// 2) Ejecuta la consulta y guarda el resultado en $resultados
+$sql = "select * from alumnos";
+{{$resultados = mysqli_query($conexion, $sql);|$resultados = $conexion->query($sql);}}
+
+// 3) Condición: el resultado no tiene filas
+if ({{mysqli_num_rows($resultados) == 0}}) {
+    echo "No hay alumnos";
+} else {
+    // 4) Recorre las filas y muestra el nombre de cada alumno
+    {{while ($fila = mysqli_fetch_assoc($resultados)) {|while ($fila = mysqli_fetch_array($resultados)) {}}
+        {{echo $fila["nombre"] . "<br/>";|echo $fila["nombre"] . "<br>";|echo $fila["nombre"];}}
+    }
+}
+?>`},
+{m:true, t:"De memoria: tabla de alumnos", d:"Escribe la consulta y el bucle para pintar una fila por alumno.", c:`<?php require_once "conexion.php"; ?>
+<table>
+    <tr><th>Nombre</th><th>Apellido</th></tr>
+<?php
+// 1) Consulta todos los alumnos usando $conexion->query
+{{$resultado = $conexion->query("select * from alumnos");|$resultado = mysqli_query($conexion, "select * from alumnos");}}
+
+// 2) Recorre cada fila en $row
+{{while ($row = mysqli_fetch_array($resultado)) {|while ($row = mysqli_fetch_assoc($resultado)) {}}
+    echo "<tr>";
+    echo "<td>" . {{$row["nombre"]}} . "</td>";
+    echo "<td>" . {{$row["apellido"]}} . "</td>";
+    echo "</tr>";
+}
+?>
+</table>`},
+{m:true, t:"De memoria: formulario POST", d:"El formulario envía «usuario» por POST a procesar.php. procesar.php comprueba que llega y saluda.", c:`<!-- form.php -->
+{{<form method="post" action="procesar.php">|<form action="procesar.php" method="post">}}
+    Usuario: {{<input type="text" name="usuario">|<input name="usuario" type="text">}}
+    <input type="submit" value="Enviar">
+</form>
+
+<?php // procesar.php
+// 1) Comprueba que la petición llega por POST
+{{if ($_SERVER["REQUEST_METHOD"] == "POST") {}}
+    // 2) Comprueba que existe usuario
+    {{if (isset($_POST["usuario"])) {}}
+        // 3) Muestra "Hola " seguido del usuario
+        {{echo "Hola " . $_POST["usuario"];}}
+    }
+}
+?>`},
+{m:true, t:"De memoria: formulario con fichero", d:"Escribe la etiqueta form para enviar nombre y fichero a get_post.php, y en get_post.php muestra lo recibido.", c:`<!-- index.php -->
+{{<form method="post" action="get_post.php" enctype="multipart/form-data">|<form action="get_post.php" method="post" enctype="multipart/form-data">}}
+    Nombre: <input type="text" name="usuario">
+    Fichero: {{<input type="file" name="fichero">|<input name="fichero" type="file">}}
+    <input type="submit" name="Enviar" value="Enviar">
+</form>
+
+<?php // get_post.php
+// 1) Muestra el nombre del usuario si existe
+{{if (isset($_POST["usuario"])) {}}
+    {{print_r($_POST["usuario"]);|echo $_POST["usuario"];}}
+}
+// 2) Muestra la información del fichero
+{{print_r($_FILES);}}
+?>`}
+);
+
+/* ---------- Utilidades ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const KEY = 'phpRec2.';
+function load(k, d) { try { const v = localStorage.getItem(KEY + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function save(k, v) { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch (e) {} }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function fmt(s) { return esc(s).replace(/`([^`]+)`/g, '<code>$1</code>'); }
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function num(n) { return n.toLocaleString('es-ES', { maximumFractionDigits: 2 }); }
+function norm(s) { return String(s).trim().replace(/'/g, '"').replace(/\s+/g, '').replace(/;+$/, '').replace(/select\*from/gi, 'select*from'); }
+let uidN = 0; const uid = () => 'u' + (++uidN);
+
+const KW = 'if|else|elseif|switch|case|default|break|while|for|foreach|endforeach|as|function|return|class|public|private|static|new|echo|print|require_once|require|include|void|null|true|false';
+const HL_RE = new RegExp(
+  '(\\/\\/[^\\n]*|#[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/|<!--[\\s\\S]*?-->)' +
+  '|("(?:\\\\.|[^"\\\\\\n])*"|\'(?:\\\\.|[^\'\\\\\\n])*\')' +
+  '|(\\$[A-Za-z_]\\w*)' +
+  '|(<\\?php|<\\?=|\\?>)' +
+  '|(<\\/?[A-Za-z][\\w-]*)' +
+  '|\\b(' + KW + ')\\b' +
+  '|([A-Za-z_]\\w*)(?=\\s*\\()' +
+  '|(\\b\\d+(?:\\.\\d+)?\\b)', 'g');
+const HL_CLS = ['c', 's', 'v', 't', 'h', 'k', 'f', 'n'];
+function hl(src) {
+  let out = '', last = 0, m;
+  HL_RE.lastIndex = 0;
+  while ((m = HL_RE.exec(src))) {
+    out += esc(src.slice(last, m.index));
+    const g = m.slice(1).findIndex(x => x !== undefined);
+    out += '<span class="tk-' + HL_CLS[g] + '">' + esc(m[0]) + '</span>';
+    last = HL_RE.lastIndex;
+  }
+  return out + esc(src.slice(last));
+}
+
+/* ---------- Progreso guardado ---------- */
+function record(kind, score) {
+  const st = load('stats', {});
+  st[kind] = st[kind] || { n: 0, sum: 0 };
+  st[kind].n++; st[kind].sum += score;
+  save('stats', st);
+  renderChips();
+}
+function renderChips() {
+  const st = load('stats', {}), sims = load('sims', []);
+  const parts = [['test', 'Test'], ['errores', 'Errores'], ['completar', 'Completar']];
+  let html = parts.map(([k, label]) => {
+    const s = st[k];
+    if (!s || !s.n) return `<span class="chip">${label} <b>sin practicar</b></span>`;
+    const pct = Math.round(s.sum / s.n * 100);
+    const lvl = pct >= 70 ? 'ok' : pct >= 50 ? 'mid' : 'bad';
+    return `<span class="chip lvl-${lvl}">${label} <b>${pct}%</b></span>`;
+  }).join('');
+  if (sims.length) {
+    const last = sims[sims.length - 1];
+    html += `<span class="chip lvl-${last.total >= 4 ? 'ok' : 'bad'}">Último simulacro <b>${num(last.total)} / 8</b></span>`;
+  }
+  $('#chips').innerHTML = html;
+}
+
+/* ---------- Ejercicios ---------- */
+function renderMC(q, mount, opts = {}) {
+  const order = shuffle([0, 1, 2, 3]);
+  let chosen = null, locked = false;
+  mount.innerHTML = `<div class="q-text">${fmt(q.q)}</div>` +
+    (q.c ? `<pre class="code">${hl(q.c)}</pre>` : '') +
+    `<div class="opts">${order.map((oi, k) => `<button type="button" class="opt" data-i="${oi}"><span class="opt-key">${'ABCD'[k]}</span><span>${fmt(q.o[oi])}</span></button>`).join('')}</div>` +
+    `<div class="exp" hidden></div>`;
+  const btns = $$('.opt', mount);
+  const api = {
+    grade: () => chosen === 0 ? 1 : 0,
+    answered: () => chosen !== null,
+    pick(k) { if (btns[k]) btns[k].click(); },
+    reveal() {
+      locked = true;
+      btns.forEach(b => { const i = +b.dataset.i; b.disabled = true; b.classList.remove('sel'); if (i === 0) b.classList.add('ok'); else if (i === chosen) b.classList.add('bad'); });
+      const ex = $('.exp', mount);
+      ex.hidden = false;
+      ex.classList.add(chosen === 0 ? 'is-ok' : 'is-bad');
+      ex.innerHTML = `<strong>${chosen === 0 ? 'Correcto.' : chosen === null ? 'Sin responder.' : 'Incorrecto.'}</strong>${fmt(q.e)}`;
+    }
+  };
+  btns.forEach(b => b.addEventListener('click', () => {
+    if (locked) return;
+    chosen = +b.dataset.i;
+    btns.forEach(x => x.classList.toggle('sel', x === b));
+    if (opts.instant) { api.reveal(); opts.onDone && opts.onDone(chosen === 0 ? 1 : 0); }
+  }));
+  return api;
+}
+
+function renderErr(ex, mount) {
+  const lines = ex.c.split('\n');
+  const errLines = Object.keys(ex.e).map(Number);
+  const sel = new Set();
+  let locked = false;
+  const id = uid();
+  mount.innerHTML = `<h3>${esc(ex.t)}</h3><p class="task">${fmt(ex.d)}<span class="count">${errLines.length} errores</span></p>` +
+    `<div class="err-code"><div class="err-code-inner">${lines.map((l, i) => `
+      <div class="ln" data-l="${i + 1}">
+        <button type="button" class="ln-btn" aria-pressed="false"><span class="ln-no">${i + 1}</span><code class="ln-src">${hl(l) || ' '}</code></button>
+        <div class="ln-fix" hidden><input id="${id}-fix${i + 1}" type="text" spellcheck="false" autocomplete="off" placeholder="Escribe la línea corregida (opcional)"></div>
+        <div class="ln-res" hidden></div>
+      </div>`).join('')}</div></div>`;
+  $$('.ln', mount).forEach(row => {
+    const n = +row.dataset.l, btn = $('.ln-btn', row), fix = $('.ln-fix', row);
+    btn.addEventListener('click', () => {
+      if (locked || !lines[n - 1].trim()) return;
+      if (sel.has(n)) sel.delete(n); else sel.add(n);
+      const on = sel.has(n);
+      row.classList.toggle('sel', on);
+      btn.setAttribute('aria-pressed', on);
+      fix.hidden = !on;
+      if (on) { const inp = $('input', fix); if (!inp.value) inp.value = lines[n - 1].trim(); inp.focus(); }
+    });
+  });
+  return {
+    answered: () => sel.size > 0,
+    grade() {
+      let hits = 0, fp = 0;
+      sel.forEach(n => ex.e[n] ? hits++ : fp++);
+      return Math.max(0, (hits - 0.5 * fp) / errLines.length);
+    },
+    reveal() {
+      locked = true;
+      $$('.ln', mount).forEach(row => {
+        const n = +row.dataset.l, btn = $('.ln-btn', row), res = $('.ln-res', row), fixBox = $('.ln-fix', row);
+        btn.disabled = true;
+        const typed = $('input', fixBox).value;
+        fixBox.hidden = true;
+        row.classList.remove('sel');
+        if (ex.e[n]) {
+          const [fix, why] = ex.e[n];
+          const found = sel.has(n);
+          row.classList.add(found ? 'found' : 'missed');
+          let h = `<div><span class="${found ? 'tag-ok' : 'tag-bad'}">${found ? 'Encontrado' : 'Se te ha escapado'}</span> · <span class="why">${esc(why)}</span></div>`;
+          h += fix ? `<div>Corrección: <code>${esc(fix.trim())}</code></div>` : `<div>Corrección: borrar la línea.</div>`;
+          if (found && typed.trim()) {
+            const same = fix ? norm(typed) === norm(fix) : false;
+            h += `<div>Tu versión: <code>${esc(typed.trim())}</code> ${same ? '<span class="tag-ok">igual</span>' : '<span class="why">compárala con la corrección</span>'}</div>`;
+          }
+          res.innerHTML = h; res.hidden = false;
+        } else if (sel.has(n)) {
+          row.classList.add('fp');
+          res.innerHTML = `<div><span class="tag-bad">Esta línea estaba bien</span> · <span class="why">resta medio error</span></div>`;
+          res.hidden = false;
+        }
+      });
+      mount.insertAdjacentHTML('beforeend', `<div class="legend"><span class="l-found">encontrado</span><span class="l-missed">no encontrado</span><span class="l-fp">marcada sin error</span></div>`);
+    }
+  };
+}
+
+function renderFill(ex, mount) {
+  const blanks = [];
+  const tpl = ex.c.replace(/\{\{(.+?)\}\}/g, (m, a) => { blanks.push(a.split('|')); return '\uE000' + String.fromCharCode(0xE100 + blanks.length - 1); });
+  const id = uid();
+  const code = hl(tpl).replace(/\uE000([\uE100-\uE1FF])/g, (m, ch) => {
+    const i = ch.charCodeAt(0) - 0xE100;
+    const w = Math.max(3, blanks[i][0].length + 1);
+    return `<input class="blank" data-b="${i}" id="${id}-b${i}" style="width:${w}ch" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Hueco ${i + 1}">`;
+  });
+  mount.innerHTML = `<h3>${esc(ex.t)}</h3><p class="task">${fmt(ex.d)}<span class="count">${blanks.length} huecos</span></p><pre class="code">${code}</pre>`;
+  const inputs = $$('.blank', mount);
+  inputs.forEach(inp => inp.addEventListener('input', () => { inp.style.width = Math.max(+inp.style.width.replace('ch', ''), inp.value.length + 1) + 'ch'; }));
+  const ok = inp => blanks[+inp.dataset.b].some(a => norm(a) === norm(inp.value));
+  return {
+    answered: () => inputs.some(i => i.value.trim()),
+    grade: () => inputs.filter(ok).length / inputs.length,
+    reveal() {
+      inputs.forEach(inp => {
+        inp.readOnly = true;
+        if (ok(inp)) inp.classList.add('ok');
+        else {
+          inp.classList.add('bad');
+          inp.insertAdjacentHTML('afterend', `<span class="sol">${esc(blanks[+inp.dataset.b][0])}</span>`);
+        }
+      });
+      const right = inputs.filter(ok).length;
+      mount.insertAdjacentHTML('beforeend', `<p class="hint">${right} de ${inputs.length} huecos bien. Las respuestas en verde son las que faltaban.</p>`);
+    }
+  };
+}
+
+/* ---------- Modo práctica ---------- */
+function makePractice(kind, bank, renderer, opts = {}) {
+  const card = $('#' + kind + '-card'), counter = $('#' + kind + '-counter');
+  const next = $('#' + kind + '-next'), check = $('#' + kind + '-check');
+  let deck = [], pos = -1, cur = null, curId = null, done = false;
+  const sess = { n: 0, sum: 0 };
+  function build() { deck = shuffle(opts.ids ? opts.ids() : bank.map((_, i) => i)); pos = -1; }
+  function label() {
+    const s = sess.n ? `Esta sesión: ${num(sess.sum)} de ${sess.n} · ${Math.round(sess.sum / sess.n * 100)}%` : 'Esta sesión: aún nada corregido';
+    counter.textContent = deck.length ? `${pos + 1} de ${deck.length} · ${s}` : s;
+  }
+  function show() {
+    pos++;
+    if (pos >= deck.length) { build(); pos = 0; }
+    if (!deck.length) {
+      card.innerHTML = '<p class="empty">No tienes fallos guardados. Desmarca «Solo mis fallos» para practicar con todas las preguntas.</p>';
+      cur = null; label(); return;
+    }
+    curId = deck[pos]; done = false;
+    cur = renderer(bank[curId], card, { instant: true, onDone: s => finish(s) });
+    if (check) check.hidden = false;
+    label();
+  }
+  function finish(score) {
+    if (done) return;
+    done = true; sess.n++; sess.sum += score;
+    record(kind, score);
+    opts.after && opts.after(curId, score);
+    if (check) check.hidden = true;
+    label();
+  }
+  if (check) check.addEventListener('click', () => { if (!cur || done) return; const s = cur.grade(); cur.reveal(); finish(s); });
+  next.addEventListener('click', show);
+  build(); show();
+  return { restart() { build(); show(); }, next: show, cur: () => cur, done: () => done };
+}
+
+const testFails = () => new Set(load('fails', []));
+function updateFailsCount() { $('#test-fails-n').textContent = testFails().size; }
+const testP = makePractice('test', MC, renderMC, {
+  ids: () => $('#test-fails').checked ? [...testFails()].filter(i => MC[i]) : MC.map((_, i) => i),
+  after(id, score) {
+    const f = testFails();
+    if (score) f.delete(id); else f.add(id);
+    save('fails', [...f]); updateFailsCount();
+  }
+});
+$('#test-fails').addEventListener('change', () => testP.restart());
+updateFailsCount();
+makePractice('errores', ERR, renderErr);
+const fillP = makePractice('completar', FILL, renderFill, { ids: () => FILL.map((_, i) => i).filter(i => !$('#completar-mem').checked || FILL[i].m) });
+$('#completar-mem').addEventListener('change', () => fillP.restart());
+
+/* ---------- Simulacro ---------- */
+let sim = null, simTick = null;
+function renderHistory() {
+  const sims = load('sims', []);
+  $('#sim-history').innerHTML = sims.length ? `<h3>Tus últimos simulacros</h3><div class="history">${sims.slice(-6).reverse().map(s => `<div><span>${esc(s.date)}</span><span>${num(s.total)} / 8 ${s.total >= 4 ? '· llegas al 4' : ''}</span></div>`).join('')}</div>` : '';
+}
+function startSim() {
+  const body = $('#sim-body');
+  const mcs = shuffle(MC.map((_, i) => i)).slice(0, 10);
+  const errs = shuffle(ERR.map((_, i) => i)).slice(0, 2);
+  const idx = FILL.map((_, i) => i);
+  const fills = [shuffle(idx.filter(i => !FILL[i].m))[0], shuffle(idx.filter(i => FILL[i].m))[0]];
+  body.innerHTML = `
+    <div class="sim-section" id="sim-s1"><h3>Parte 1 · Test <small>2 pts · 0,2 por pregunta</small></h3></div>
+    <div class="sim-section" id="sim-s2"><h3>Parte 2 · Corregir errores <small>2 pts · 1 por código</small></h3></div>
+    <div class="sim-section" id="sim-s3"><h3>Parte 3 · Completar código <small>4 pts · 2 por ejercicio</small></h3></div>
+    <div class="bar"><span class="counter" id="sim-warn"></span><div class="bar-btns"><button class="btn primary" id="sim-submit">Entregar examen</button></div></div>`;
+  const add = (sec, n, fn, item) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<span class="sim-num">${n}</span><div></div>`;
+    $(sec).appendChild(card);
+    return fn(item, card.lastElementChild, {});
+  };
+  sim = {
+    mc: mcs.map((i, k) => add('#sim-s1', 'Pregunta ' + (k + 1), renderMC, MC[i])),
+    err: errs.map((i, k) => add('#sim-s2', 'Código ' + (k + 1), renderErr, ERR[i])),
+    fill: fills.map((i, k) => add('#sim-s3', 'Ejercicio ' + (k + 1), renderFill, FILL[i])),
+    t0: Date.now(), confirm: false, done: false
+  };
+  $('#sim-submit').addEventListener('click', submitSim);
+  $('#sim-intro').hidden = true; $('#sim-result').hidden = true; body.hidden = false;
+  clearInterval(simTick);
+  const tick = () => { const s = Math.floor((Date.now() - sim.t0) / 1000); $('#sim-timer').textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+  tick(); simTick = setInterval(tick, 1000);
+  window.scrollTo({ top: $('#v-simulacro').offsetTop - 10 });
+}
+function submitSim() {
+  if (!sim || sim.done) return;
+  const blank = [...sim.mc, ...sim.err, ...sim.fill].filter(x => !x.answered()).length;
+  if (blank && !sim.confirm) {
+    sim.confirm = true;
+    $('#sim-warn').textContent = `Te quedan ${blank} ejercicios sin tocar. Pulsa otra vez para entregar igualmente.`;
+    $('#sim-submit').textContent = 'Entregar igualmente';
+    return;
+  }
+  sim.done = true;
+  clearInterval(simTick);
+  const p1 = sim.mc.reduce((a, x) => a + x.grade(), 0) * 0.2;
+  const p2 = sim.err.reduce((a, x) => a + x.grade(), 0) * 1;
+  const p3 = sim.fill.reduce((a, x) => a + x.grade(), 0) * 2;
+  [...sim.mc, ...sim.err, ...sim.fill].forEach(x => x.reveal());
+  const total = Math.round((p1 + p2 + p3) * 100) / 100;
+  const mins = Math.round((Date.now() - sim.t0) / 60000);
+  const sims = load('sims', []);
+  sims.push({ date: new Date().toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), total, p1, p2, p3 });
+  save('sims', sims.slice(-20));
+  record('test', p1 / 2); record('errores', p2 / 2); record('completar', p3 / 4);
+  const weakest = [[p1 / 2, 'el test'], [p2 / 2, 'corregir errores'], [p3 / 4, 'completar código']].sort((a, b) => a[0] - b[0])[0][1];
+  const res = $('#sim-result');
+  res.innerHTML = `
+    <div class="result-top"><span class="result-score">${num(total)}<small> / 8</small></span>
+      <span class="verdict ${total >= 4 ? 'ok' : 'bad'}">${total >= 4 ? 'Llegas al 4' : `Te faltan ${num(Math.round((4 - total) * 100) / 100)} para el 4`}</span></div>
+    <div class="meter" aria-hidden="true"><i style="width:${Math.min(100, total / 8 * 100)}%"></i><span class="goal" title="4 puntos"></span></div>
+    <table class="breakdown"><tbody>
+      <tr><td>Test</td><td>${num(Math.round(p1 * 100) / 100)} / 2</td></tr>
+      <tr><td>Corregir errores</td><td>${num(Math.round(p2 * 100) / 100)} / 2</td></tr>
+      <tr><td>Completar código</td><td>${num(Math.round(p3 * 100) / 100)} / 4</td></tr>
+    </tbody></table>
+    <p class="muted">${mins} min. Donde más puntos pierdes es en ${weakest}: practícalo en su pestaña. Abajo tienes cada ejercicio corregido.</p>
+    <div><button class="btn primary" id="sim-again">Hacer otro simulacro</button></div>`;
+  res.hidden = false;
+  $('#sim-warn').textContent = 'Examen corregido.';
+  $('#sim-submit').hidden = true;
+  $('#sim-again').addEventListener('click', startSim);
+  window.scrollTo({ top: $('#v-simulacro').offsetTop - 10 });
+}
+$('#sim-start').addEventListener('click', startSim);
+renderHistory();
+
+/* ---------- Chuleta ---------- */
+$('#sheet').innerHTML = SHEET.map(s => `<div class="card"><h3>${esc(s.h)}</h3>${s.code ? `<pre class="code">${hl(s.code)}</pre>` : ''}${s.list.length ? `<ul>${s.list.map(x => `<li class="note">${esc(x)}</li>`).join('')}</ul>` : ''}</div>`).join('');
+
+/* ---------- Pestañas y cabecera ---------- */
+const VIEWS = ['test', 'errores', 'completar', 'simulacro', 'chuleta'];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'test';
+  VIEWS.forEach(x => { $('#v-' + x).hidden = x !== v; });
+  $$('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.v === v));
+  if (v === 'simulacro') renderHistory();
+}
+$$('.tab').forEach(t => t.addEventListener('click', () => { location.hash = t.dataset.v; }));
+window.addEventListener('hashchange', route);
+route();
+
+document.addEventListener('keydown', e => {
+  if ($('#v-test').hidden || e.target.closest('input, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = '1234'.indexOf(e.key) >= 0 ? '1234'.indexOf(e.key) : 'abcd'.indexOf(e.key.toLowerCase());
+  if (k >= 0 && e.key.length === 1) { const c = testP.cur(); if (c && !testP.done()) c.pick(k); }
+  else if (e.key === 'Enter' && testP.done() && !e.target.closest('button')) testP.next();
+});
+
+(function countdown() {
+  const exam = new Date(2026, 10, 5), today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = Math.round((exam - today) / 86400000);
+  if (d < 0) return;
+  const when = d === 0 ? 'El examen es hoy.' : d === 1 ? 'El examen es mañana.' : `Faltan ${d} días para el examen del jueves 5.`;
+  $('#sub').insertAdjacentHTML('beforeend', ' ' + esc(when));
+})();
+renderChips();
+</script>
+</body>
+</html>
